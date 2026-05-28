@@ -1,172 +1,65 @@
-import datetime
-import random
-
-import altair as alt
-import numpy as np
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import plotly.express as px
 
-# Show app title and description.
-st.set_page_config(page_title="Support tickets", page_icon="🎫")
-st.title("🎫 Support tickets")
-st.write(
-    """
-    This app shows how you can build an internal tool in Streamlit. Here, we are 
-    implementing a support ticket workflow. The user can create a ticket, edit 
-    existing tickets, and view some statistics.
-    """
-)
+# 페이지 기본 설정
+st.set_page_config(page_title="아시아 축구선수 25/26 스탯 대시보드", layout="wide")
 
-# Create a random Pandas dataframe with existing tickets.
-if "df" not in st.session_state:
-
-    # Set seed for reproducibility.
-    np.random.seed(42)
-
-    # Make up some fake issue descriptions.
-    issue_descriptions = [
-        "Network connectivity issues in the office",
-        "Software application crashing on startup",
-        "Printer not responding to print commands",
-        "Email server downtime",
-        "Data backup failure",
-        "Login authentication problems",
-        "Website performance degradation",
-        "Security vulnerability identified",
-        "Hardware malfunction in the server room",
-        "Employee unable to access shared files",
-        "Database connection failure",
-        "Mobile application not syncing data",
-        "VoIP phone system issues",
-        "VPN connection problems for remote employees",
-        "System updates causing compatibility issues",
-        "File server running out of storage space",
-        "Intrusion detection system alerts",
-        "Inventory management system errors",
-        "Customer data not loading in CRM",
-        "Collaboration tool not sending notifications",
-    ]
-
-    # Generate the dataframe with 100 rows/tickets.
+# 가상 데이터 생성 (실제로는 API나 DB에서 불러와야 합니다)
+@st.cache_data
+def load_data():
     data = {
-        "ID": [f"TICKET-{i}" for i in range(1100, 1000, -1)],
-        "Issue": np.random.choice(issue_descriptions, size=100),
-        "Status": np.random.choice(["Open", "In Progress", "Closed"], size=100),
-        "Priority": np.random.choice(["High", "Medium", "Low"], size=100),
-        "Date Submitted": [
-            datetime.date(2023, 6, 1) + datetime.timedelta(days=random.randint(0, 182))
-            for _ in range(100)
-        ],
+        '선수명': ['손흥민', '이강인', '김민재', '구보 다케후사', '미토마 카오루', '황희찬'],
+        '국적': ['대한민국', '대한민국', '대한민국', '일본', '일본', '대한민국'],
+        '소속팀': ['토트넘 홋스퍼', '파리 생제르맹', '바이에른 뮌헨', '레알 소시에다드', '브라이튼', '울버햄튼'],
+        '리그': ['프리미어리그', '리그 1', '분데스리가', '라리가', '프리미어리그', '프리미어리그'],
+        '포지션': ['FW', 'MF', 'DF', 'MF', 'FW', 'FW'],
+        '출장시간': [2800, 2100, 2900, 2400, 1800, 2200],
+        '골': [15, 6, 2, 8, 5, 10],
+        '도움': [8, 10, 1, 6, 4, 3],
+        '평점': [7.4, 7.2, 7.3, 7.1, 6.9, 7.0]
     }
-    df = pd.DataFrame(data)
+    return pd.DataFrame(data)
 
-    # Save the dataframe in session state (a dictionary-like object that persists across
-    # page runs). This ensures our data is persisted when the app updates.
-    st.session_state.df = df
+df = load_data()
 
+# --- 사이드바 필터링 ---
+st.sidebar.header("🔍 검색 및 필터")
+selected_nation = st.sidebar.multiselect("국적 선택", options=df['국적'].unique(), default=df['국적'].unique())
+selected_league = st.sidebar.multiselect("리그 선택", options=df['리그'].unique(), default=df['리그'].unique())
+selected_position = st.sidebar.multiselect("포지션 선택", options=df['포지션'].unique(), default=df['포지션'].unique())
 
-# Show a section to add a new ticket.
-st.header("Add a ticket")
+# 필터 적용
+filtered_df = df[
+    (df['국적'].isin(selected_nation)) & 
+    (df['리그'].isin(selected_league)) & 
+    (df['포지션'].isin(selected_position))
+]
 
-# We're adding tickets via an `st.form` and some input widgets. If widgets are used
-# in a form, the app will only rerun once the submit button is pressed.
-with st.form("add_ticket_form"):
-    issue = st.text_area("Describe the issue")
-    priority = st.selectbox("Priority", ["High", "Medium", "Low"])
-    submitted = st.form_submit_button("Submit")
+# --- 메인 화면 ---
+st.title("🌏 25/26 시즌 아시아 축구선수 스탯 허브")
+st.markdown("전 세계 주요 리그에서 활약하는 아시아 선수들의 활약상을 확인하세요.")
 
-if submitted:
-    # Make a dataframe for the new ticket and append it to the dataframe in session
-    # state.
-    recent_ticket_number = int(max(st.session_state.df.ID).split("-")[1])
-    today = datetime.datetime.now().strftime("%m-%d-%Y")
-    df_new = pd.DataFrame(
-        [
-            {
-                "ID": f"TICKET-{recent_ticket_number+1}",
-                "Issue": issue,
-                "Status": "Open",
-                "Priority": priority,
-                "Date Submitted": today,
-            }
-        ]
-    )
+st.divider()
 
-    # Show a little success message.
-    st.write("Ticket submitted! Here are the ticket details:")
-    st.dataframe(df_new, use_container_width=True, hide_index=True)
-    st.session_state.df = pd.concat([df_new, st.session_state.df], axis=0)
-
-# Show section to view and edit existing tickets in a table.
-st.header("Existing tickets")
-st.write(f"Number of tickets: `{len(st.session_state.df)}`")
-
-st.info(
-    "You can edit the tickets by double clicking on a cell. Note how the plots below "
-    "update automatically! You can also sort the table by clicking on the column headers.",
-    icon="✍️",
-)
-
-# Show the tickets dataframe with `st.data_editor`. This lets the user edit the table
-# cells. The edited data is returned as a new dataframe.
-edited_df = st.data_editor(
-    st.session_state.df,
-    use_container_width=True,
-    hide_index=True,
-    column_config={
-        "Status": st.column_config.SelectboxColumn(
-            "Status",
-            help="Ticket status",
-            options=["Open", "In Progress", "Closed"],
-            required=True,
-        ),
-        "Priority": st.column_config.SelectboxColumn(
-            "Priority",
-            help="Priority",
-            options=["High", "Medium", "Low"],
-            required=True,
-        ),
-    },
-    # Disable editing the ID and Date Submitted columns.
-    disabled=["ID", "Date Submitted"],
-)
-
-# Show some metrics and charts about the ticket.
-st.header("Statistics")
-
-# Show metrics side by side using `st.columns` and `st.metric`.
+# 주요 스탯 요약 (KPI)
 col1, col2, col3 = st.columns(3)
-num_open_tickets = len(st.session_state.df[st.session_state.df.Status == "Open"])
-col1.metric(label="Number of open tickets", value=num_open_tickets, delta=10)
-col2.metric(label="First response time (hours)", value=5.2, delta=-1.5)
-col3.metric(label="Average resolution time (hours)", value=16, delta=2)
+col1.metric("등록된 선수 수", f"{len(filtered_df)} 명")
+col2.metric("총 득점", f"{filtered_df['골'].sum()} 골")
+col3.metric("총 도움", f"{filtered_df['도움'].sum()} 개")
 
-# Show two Altair charts using `st.altair_chart`.
-st.write("")
-st.write("##### Ticket status per month")
-status_plot = (
-    alt.Chart(edited_df)
-    .mark_bar()
-    .encode(
-        x="month(Date Submitted):O",
-        y="count():Q",
-        xOffset="Status:N",
-        color="Status:N",
-    )
-    .configure_legend(
-        orient="bottom", titleFontSize=14, labelFontSize=14, titlePadding=5
-    )
-)
-st.altair_chart(status_plot, use_container_width=True, theme="streamlit")
+st.divider()
 
-st.write("##### Current ticket priorities")
-priority_plot = (
-    alt.Chart(edited_df)
-    .mark_arc()
-    .encode(theta="count():Q", color="Priority:N")
-    .properties(height=300)
-    .configure_legend(
-        orient="bottom", titleFontSize=14, labelFontSize=14, titlePadding=5
-    )
-)
-st.altair_chart(priority_plot, use_container_width=True, theme="streamlit")
+# 데이터 테이블 출력
+st.subheader("📊 상세 스탯 테이블")
+st.dataframe(filtered_df, use_container_width=True)
+
+# 데이터 시각화 (공격 포인트)
+st.subheader("📈 선수별 공격 포인트 (골+도움)")
+if not filtered_df.empty:
+    filtered_df['공격포인트'] = filtered_df['골'] + filtered_df['도움']
+    fig = px.bar(filtered_df, x='선수명', y='공격포인트', color='국적', 
+                 hover_data=['소속팀', '골', '도움'], text_auto=True)
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.warning("선택된 필터에 해당하는 선수가 없습니다.")
